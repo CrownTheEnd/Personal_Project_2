@@ -51,3 +51,12 @@ vs
     if you type /queue Cake the bot sends you a dm giving you info and prompting a reponse command like bet or cancel
     if you bet then it queues the fighter, otherwise it cancels
     that way the other person won't see your bet"
+
+**Update v.2**
+
+It's v2 cause there was a hiccup when committing changes and a bunch of files got reverted and deleted, were all gucci now I think...
+
+Going to re add this, setting random modifiers for fighters could be fun like:
+- Title
+- Element
+- Status
