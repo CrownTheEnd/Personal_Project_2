@@ -172,13 +172,33 @@ async def fight(ctx, fighter_a_name: str, fighter_b_name: str):
         detailed=True
     )
 
-    # Extract detailed stats
-    critical_rate_a = stats.get('critical_rate_a', 0)
-    critical_rate_b = stats.get('critical_rate_b', 0)
-    miss_rate_a = stats.get('miss_rate_a', 0)
-    miss_rate_b = stats.get('miss_rate_b', 0)
-    fighter_a_ability_name = stats.get('fighter_a_ability_name', 'None')
-    fighter_b_ability_name = stats.get('fighter_b_ability_name', 'None')
+    # Initialize counters for critical hits and misses
+    critical_hits_a = 0
+    critical_hits_b = 0
+    misses_a = 0
+    misses_b = 0
+
+    # Count critical hits and misses from turn results
+    for turn_result in turn_results:
+        attacker, defender, damage, defender_hp, critical, miss = turn_result
+        if critical:
+            if attacker.lower() == fighter_a_name_lower:
+                critical_hits_a += 1
+            else:
+                critical_hits_b += 1
+        if miss:
+            if attacker.lower() == fighter_a_name_lower:
+                misses_a += 1
+            else:
+                misses_b += 1
+
+    total_attacks = len(turn_results)  # Total number of attacks in the fight
+
+    # Calculate percentages
+    critical_percentage_a = (critical_hits_a / total_attacks) * 100 if total_attacks > 0 else 0
+    critical_percentage_b = (critical_hits_b / total_attacks) * 100 if total_attacks > 0 else 0
+    miss_percentage_a = (misses_a / total_attacks) * 100 if total_attacks > 0 else 0
+    miss_percentage_b = (misses_b / total_attacks) * 100 if total_attacks > 0 else 0
 
     # Determine winner
     winner_name = turn_results[-1][0]  # Winner's name from the last turn
@@ -213,13 +233,12 @@ async def fight(ctx, fighter_a_name: str, fighter_b_name: str):
     write_to_fighters(fighter)
 
     # Create and send the initial embed with fight updates
-    embed = discord.Embed(
+    message = await ctx.send(embed=discord.Embed(
         title=f"{fighter_a_name.capitalize()} vs {fighter_b_name.capitalize()}",
         description="Fight in progress...\n\n"
-                    f"{fighter_a_name.capitalize()}: Attack Stat: {attack_stat_a}, Ability: {fighter_a_ability_name.capitalize()}\n"
-                    f"{fighter_b_name.capitalize()}: Attack Stat: {attack_stat_b}, Ability: {fighter_b_ability_name.capitalize()}"
-    )
-    message = await ctx.send(embed=embed)
+                    f"{fighter_a_name.capitalize()}: Attack Stat: {attack_stat_a}, Ability: {stats.get('fighter_a_ability_name', 'None').capitalize()}\n"
+                    f"{fighter_b_name.capitalize()}: Attack Stat: {attack_stat_b}, Ability: {stats.get('fighter_b_ability_name', 'None').capitalize()}"
+    ))
 
     # Send turn-by-turn results
     log_lines = []
@@ -247,8 +266,8 @@ async def fight(ctx, fighter_a_name: str, fighter_b_name: str):
         embed = discord.Embed(
             title=f"{fighter_a_name.capitalize()} vs {fighter_b_name.capitalize()}",
             description="\n".join(log_lines[-3:]) + "\n\n" +
-                        f"{fighter_a_name.capitalize()}: Attack Stat: {attack_stat_a}, Ability: {fighter_a_ability_name.capitalize()}\n"
-                        f"{fighter_b_name.capitalize()}: Attack Stat: {attack_stat_b}, Ability: {fighter_b_ability_name.capitalize()}"
+                        f"{fighter_a_name.capitalize()}: Attack Stat: {attack_stat_a}, Ability: {stats.get('fighter_a_ability_name', 'None').capitalize()}\n"
+                        f"{fighter_b_name.capitalize()}: Attack Stat: {attack_stat_b}, Ability: {stats.get('fighter_b_ability_name', 'None').capitalize()}"
         )
         await message.edit(embed=embed)
         await asyncio.sleep(0.10)  # Adjust this value for different intervals
@@ -259,8 +278,8 @@ async def fight(ctx, fighter_a_name: str, fighter_b_name: str):
         description=(
             f"Current Tally: {current_wins + 1} wins\n\n"
             f"Fight Information:\n"
-            f"{fighter_a_name.capitalize()}: Attack Stat: {attack_stat_a}, Ability: {fighter_a_ability_name.capitalize()}, Critical Rate: {critical_rate_a:.2f}%, Miss Rate: {miss_rate_a:.2f}%\n"
-            f"{fighter_b_name.capitalize()}: Attack Stat: {attack_stat_b}, Ability: {fighter_b_ability_name.capitalize()}, Critical Rate: {critical_rate_b:.2f}%, Miss Rate: {miss_rate_b:.2f}%"
+            f"{fighter_a_name.capitalize()}: Attack Stat: {attack_stat_a}, Ability: {stats.get('fighter_a_ability_name', 'None').capitalize()}, Critical Rate: {critical_percentage_a:.2f}%, Miss Rate: {miss_percentage_a:.2f}%\n"
+            f"{fighter_b_name.capitalize()}: Attack Stat: {attack_stat_b}, Ability: {stats.get('fighter_b_ability_name', 'None').capitalize()}, Critical Rate: {critical_percentage_b:.2f}%, Miss Rate: {miss_percentage_b:.2f}%"
         )
     )
     if winner_image_url and winner_image_url.startswith(('http://', 'https://')):
@@ -274,29 +293,30 @@ async def fight(ctx, fighter_a_name: str, fighter_b_name: str):
     await ctx.send(file=discord.File(log_file, filename='fight_log.txt'))
 
 def simulate_fight(fighter_a_name, fighter_b_name, attack_stat_a, attack_stat_b, detailed=False):
+    import random
+    import time
+
+    random.seed(time.time())  # Seed the RNG for reproducibility
+
     # Initialize the fighters' stats
     fighter_a_hp = 100
     fighter_b_hp = 100
-    max_hp = 100
+    max_hp = 100  # Maximum HP
     fighter_a_stats = {
         'attack_stat': attack_stat_a,
-        'miss_chance': 0.20,
+        'miss_chance': 0.10,
         'hp': fighter_a_hp,
         'max_hp': max_hp,
-        'critical_chance': 0.50,
-        'turn_order_change': False,
-        'damage_reduction': 0,  # Default value
-        'abilities': {'heal': True}  # Example: add healing ability here
+        'critical_chance': 0.20,
+        'turn_order_change': False
     }
     fighter_b_stats = {
         'attack_stat': attack_stat_b,
-        'miss_chance': 0.20,
+        'miss_chance': 0.10,
         'hp': fighter_b_hp,
         'max_hp': max_hp,
-        'critical_chance': 0.50,
-        'turn_order_change': False,
-        'damage_reduction': 0,  # Default value
-        'abilities': {}  # Example: no abilities here
+        'critical_chance': 0.20,
+        'turn_order_change': False
     }
 
     # Capitalize fighter names
@@ -307,22 +327,8 @@ def simulate_fight(fighter_a_name, fighter_b_name, attack_stat_a, attack_stat_b,
     fighter_a_ability_name = random.choice(list(abilities.keys()))
     fighter_b_ability_name = random.choice(list(abilities.keys()))
 
-    # Apply abilities at the start and record them
     apply_ability(fighter_a_stats, fighter_a_ability_name)
     apply_ability(fighter_b_stats, fighter_b_ability_name)
-
-    # Determine turn order based on abilities
-    fighter_a_goes_first = fighter_a_stats['turn_order_change']
-    fighter_b_goes_first = fighter_b_stats['turn_order_change']
-
-    if fighter_a_goes_first and fighter_b_goes_first:
-        # If both have the turn order change ability, randomly pick which one goes first
-        fighter_a_goes_first = random.choice([True, False])
-        fighter_b_goes_first = not fighter_a_goes_first
-    elif fighter_a_goes_first:
-        fighter_b_goes_first = False
-    elif fighter_b_goes_first:
-        fighter_a_goes_first = False
 
     # Initialize results list
     results = []
@@ -334,96 +340,91 @@ def simulate_fight(fighter_a_name, fighter_b_name, attack_stat_a, attack_stat_b,
     total_attacks_a = 0
     total_attacks_b = 0
 
+    # Determine turn order based on abilities
+    fighter_a_goes_first = fighter_a_stats['turn_order_change']
+    fighter_b_goes_first = fighter_b_stats['turn_order_change']
+
+    if fighter_a_goes_first and fighter_b_goes_first:
+        # If both have the turn order change ability, revert to random choice
+        fighter_a_goes_first = fighter_b_goes_first = False
+
     # Simulation loop
     while fighter_a_hp > 0 and fighter_b_hp > 0:
         if (fighter_a_goes_first and not fighter_b_goes_first) or (not fighter_a_goes_first and not fighter_b_goes_first and random.choice([True, False])):
             # Fighter A attacks first
             total_attacks_a += 1
-            damage_a, critical_a, missed_a = get_damage(fighter_a_stats['attack_stat'], fighter_a_stats)
-            if missed_a:
+            damage_a, critical_a, miss_a = get_damage(fighter_a_stats['attack_stat'], fighter_a_stats)
+            if miss_a:
                 miss_count_a += 1
-                results.append((fighter_a_name, fighter_b_name, int(damage_a), int(fighter_b_hp), '', True))
-            else:
-                if critical_a:
-                    critical_hits_a += 1
-                damage_reduction = fighter_b_stats.get('damage_reduction', 0)
-                final_damage_a = max(damage_a - damage_reduction, 0)
-                fighter_b_hp -= final_damage_a
-                if fighter_b_hp <= 0:
-                    results.append((fighter_a_name, fighter_b_name, int(final_damage_a), 0, 'CRITICAL' if critical_a else '', False))
-                    break
-                else:
-                    results.append((fighter_a_name, fighter_b_name, int(final_damage_a), int(fighter_b_hp), 'CRITICAL' if critical_a else '', False))
+                results.append((fighter_a_name, fighter_b_name, int(damage_a), int(fighter_b_hp), '', miss_a))
+            if not miss_a:
+                fighter_b_hp -= damage_a
+                if damage_a > 0:
+                    if critical_a:
+                        critical_hits_a += 1
+                    if fighter_b_hp <= 0:
+                        results.append((fighter_a_name, fighter_b_name, int(damage_a), 0, 'CRITICAL' if critical_a else '', miss_a))
+                        break
+                    else:
+                        results.append((fighter_a_name, fighter_b_name, int(damage_a), int(fighter_b_hp), 'CRITICAL' if critical_a else '', miss_a))
 
             # Fighter B attacks second
             total_attacks_b += 1
-            damage_b, critical_b, missed_b = get_damage(fighter_b_stats['attack_stat'], fighter_b_stats)
-            if missed_b:
+            damage_b, critical_b, miss_b = get_damage(fighter_b_stats['attack_stat'], fighter_b_stats)
+            if miss_b:
                 miss_count_b += 1
-                results.append((fighter_b_name, fighter_a_name, int(damage_b), int(fighter_a_hp), '', True))
-            else:
-                if critical_b:
-                    critical_hits_b += 1
-                damage_reduction = fighter_a_stats.get('damage_reduction', 0)
-                final_damage_b = max(damage_b - damage_reduction, 0)
-                fighter_a_hp -= final_damage_b
-                if fighter_a_hp <= 0:
-                    results.append((fighter_b_name, fighter_a_name, int(final_damage_b), 0, 'CRITICAL' if critical_b else '', False))
-                    break
-                else:
-                    results.append((fighter_b_name, fighter_a_name, int(final_damage_b), int(fighter_a_hp), 'CRITICAL' if critical_b else '', False))
+                results.append((fighter_b_name, fighter_a_name, int(damage_b), int(fighter_a_hp), '', miss_b))
+            if not miss_b:
+                fighter_a_hp -= damage_b
+                if damage_b > 0:
+                    if critical_b:
+                        critical_hits_b += 1
+                    if fighter_a_hp <= 0:
+                        results.append((fighter_b_name, fighter_a_name, int(damage_b), 0, 'CRITICAL' if critical_b else '', miss_b))
+                        break
+                    else:
+                        results.append((fighter_b_name, fighter_a_name, int(damage_b), int(fighter_a_hp), 'CRITICAL' if critical_b else '', miss_b))
 
         else:
             # Fighter B attacks first
             total_attacks_b += 1
-            damage_b, critical_b, missed_b = get_damage(fighter_b_stats['attack_stat'], fighter_b_stats)
-            if missed_b:
+            damage_b, critical_b, miss_b = get_damage(fighter_b_stats['attack_stat'], fighter_b_stats)
+            if miss_b:
                 miss_count_b += 1
-                results.append((fighter_b_name, fighter_a_name, int(damage_b), int(fighter_a_hp), '', True))
-            else:
-                if critical_b:
-                    critical_hits_b += 1
-                damage_reduction = fighter_a_stats.get('damage_reduction', 0)
-                final_damage_b = max(damage_b - damage_reduction, 0)
-                fighter_a_hp -= final_damage_b
-                if fighter_a_hp <= 0:
-                    results.append((fighter_b_name, fighter_a_name, int(final_damage_b), 0, 'CRITICAL' if critical_b else '', False))
-                    break
-                else:
-                    results.append((fighter_b_name, fighter_a_name, int(final_damage_b), int(fighter_a_hp), 'CRITICAL' if critical_b else '', False))
+                results.append((fighter_b_name, fighter_a_name, int(damage_b), int(fighter_a_hp), '', miss_b))
+            if not miss_b:
+                fighter_a_hp -= damage_b
+                if damage_b > 0:
+                    if critical_b:
+                        critical_hits_b += 1
+                    if fighter_a_hp <= 0:
+                        results.append((fighter_b_name, fighter_a_name, int(damage_b), 0, 'CRITICAL' if critical_b else '', miss_b))
+                        break
+                    else:
+                        results.append((fighter_b_name, fighter_a_name, int(damage_b), int(fighter_a_hp), 'CRITICAL' if critical_b else '', miss_b))
 
             # Fighter A attacks second
             total_attacks_a += 1
-            damage_a, critical_a, missed_a = get_damage(fighter_a_stats['attack_stat'], fighter_a_stats)
-            if missed_a:
+            damage_a, critical_a, miss_a = get_damage(fighter_a_stats['attack_stat'], fighter_a_stats)
+            if miss_a:
                 miss_count_a += 1
-                results.append((fighter_a_name, fighter_b_name, int(damage_a), int(fighter_b_hp), '', True))
-            else:
-                if critical_a:
-                    critical_hits_a += 1
-                damage_reduction = fighter_b_stats.get('damage_reduction', 0)
-                final_damage_a = max(damage_a - damage_reduction, 0)
-                fighter_b_hp -= final_damage_a
-                if fighter_b_hp <= 0:
-                    results.append((fighter_a_name, fighter_b_name, int(final_damage_a), 0, 'CRITICAL' if critical_a else '', False))
-                    break
-                else:
-                    results.append((fighter_a_name, fighter_b_name, int(final_damage_a), int(fighter_b_hp), 'CRITICAL' if critical_a else '', False))
+                results.append((fighter_a_name, fighter_b_name, int(damage_a), int(fighter_b_hp), '', miss_a))
+            if not miss_a:
+                fighter_b_hp -= damage_a
+                if damage_a > 0:
+                    if critical_a:
+                        critical_hits_a += 1
+                    if fighter_b_hp <= 0:
+                        results.append((fighter_a_name, fighter_b_name, int(damage_a), 0, 'CRITICAL' if critical_a else '', miss_a))
+                        break
+                    else:
+                        results.append((fighter_a_name, fighter_b_name, int(damage_a), int(fighter_b_hp), 'CRITICAL' if critical_a else '', miss_a))
 
     # Calculate critical and miss rates
-    def calculate_rate(hits, total_attacks):
-        return (hits / total_attacks * 100) if total_attacks > 0 else 0
-
-    critical_rate_a = calculate_rate(critical_hits_a, total_attacks_a)
-    critical_rate_b = calculate_rate(critical_hits_b, total_attacks_b)
-    miss_rate_a = calculate_rate(miss_count_a, total_attacks_a)
-    miss_rate_b = calculate_rate(miss_count_b, total_attacks_b)
-
-    # Cap the critical rate and miss rate at 100%
-    critical_rate_a = min(critical_rate_a, 100)
-    critical_rate_b = min(critical_rate_b, 100)
-    miss_rate_a = min(miss_rate_a, 100)
-    miss_rate_b = min(miss_rate_b, 100)
+    critical_rate_a = critical_hits_a / total_attacks_a if total_attacks_a else 0
+    critical_rate_b = critical_hits_b / total_attacks_b if total_attacks_b else 0
+    miss_rate_a = miss_count_a / total_attacks_a if total_attacks_a else 0
+    miss_rate_b = miss_count_b / total_attacks_b if total_attacks_b else 0
 
     # Determine winner
     if fighter_a_hp <= 0 and fighter_b_hp <= 0:
@@ -445,7 +446,6 @@ def simulate_fight(fighter_a_name, fighter_b_name, attack_stat_a, attack_stat_b,
             'critical_rate_b': critical_rate_b,
             'miss_rate_a': miss_rate_a,
             'miss_rate_b': miss_rate_b,
-            'winner': winner,
             'fighter_a_ability_name': fighter_a_ability_name,
             'fighter_b_ability_name': fighter_b_ability_name
         }
@@ -453,32 +453,21 @@ def simulate_fight(fighter_a_name, fighter_b_name, attack_stat_a, attack_stat_b,
         return results, winner
 
 
-def apply_ability(fighter_stats, ability_name, **kwargs):
-    """
-    Applies the effect of an ability to a fighter's stats.
-    """
-    if ability_name in abilities:
-        ability = abilities[ability_name]
-        print(f"Applying ability: {ability_name} with stats: {fighter_stats}")
-        ability.apply(fighter_stats, **kwargs)
-    else:
-        print(f"Ability {ability_name} not found.")
-
 def get_damage(damage, fighter_stats):
     """Returns the damage with a chance to double it (critical hit) or miss."""
-    # Apply critical chance
-    is_critical = False
     if random.random() < fighter_stats['critical_chance']:
-        damage *= 2
-        is_critical = True
-    
-    # Apply miss chance
-    if random.random() < fighter_stats['miss_chance']:
-        return 0, is_critical, True  # Attack missed
-    
-    return round(damage), is_critical, False  # Attack hit
+        return round(damage * 2), True, False
+    elif random.random() < fighter_stats['miss_chance']:
+        return 0, False, True
+    return round(damage), False, False
 
-
+def apply_ability(fighter_stats, ability_name, **kwargs):
+    """Apply the effect of the fighter's ability dynamically."""
+    ability_instance = abilities.get(ability_name)
+    if ability_instance:
+        # Extract necessary arguments for the effect function
+        effect_kwargs = {k: v for k, v in kwargs.items() if k in ability_instance.effect.__code__.co_varnames}
+        ability_instance.apply(fighter_stats, **effect_kwargs)
 
 def calculate_damage(base_damage):
     """Calculate damage with a 10% chance to double it for critical hits."""
@@ -486,27 +475,23 @@ def calculate_damage(base_damage):
         return base_damage * 2, True
     return base_damage, False
 
-'''def apply_critical_chance(damage, critical_probability):
-    """Determine if an attack is a critical hit based on the given critical probability."""
-    if random.random() < critical_probability:
-        return damage * 2, True  # Critical hit, double damage
-    return damage, False  # Normal hit'''
-
 def calculate_critical_rate(critical_hits, total_attacks):
+    """Calculate the critical hit rate as a percentage."""
     if total_attacks == 0:
         return 0
-    return min((critical_hits / total_attacks) * 100, 100)  # Ensure this returns a percentage
+    return (critical_hits / total_attacks) * 100
 
-'''def apply_miss_chance(damage, miss_probability):
+def apply_miss_chance(damage, miss_probability):
     """Determine if an attack misses based on the given miss probability."""
     if random.random() < miss_probability:
         return 0, True  # Attack missed
-    return damage, False  # Attack hit'''
+    return damage, False  # Attack hit
 
-def calculate_miss_rate(miss_count, total_attacks):
+def calculate_miss_rate(missed_attacks, total_attacks):
+    """Calculate the miss rate as a percentage."""
     if total_attacks == 0:
         return 0
-    return min((miss_count / total_attacks) * 100, 100)  # Cap at 100%
+    return (missed_attacks / total_attacks) * 100
 
 # Run the bot with the token
 bot.run(DISCORD_TOKEN)
